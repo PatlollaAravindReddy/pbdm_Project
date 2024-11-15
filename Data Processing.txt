@@ -1,0 +1,156 @@
+-- Retrieve the first 10 rows from the 'remotework_temp' table to inspect a sample of the data.
+SELECT * FROM `impactofremotework.remotework.remotework_temp` LIMIT 10;
+
+-- Count the number of missing (NULL) values for each column to assess data completeness.
+SELECT 
+    COUNTIF(Employee_ID IS NULL) AS missing_employee_id,
+    COUNTIF(Age IS NULL) AS missing_age,
+    COUNTIF(Gender IS NULL) AS missing_gender,
+    COUNTIF(Job_Role IS NULL) AS missing_job_role,
+    COUNTIF(Industry IS NULL) AS missing_industry,
+    COUNTIF(Years_of_Experience IS NULL) AS missing_years_of_experience,
+    COUNTIF(Work_Location IS NULL) AS missing_work_location,
+    COUNTIF(Hours_Worked_Per_Week IS NULL) AS missing_hours_worked_per_week,
+    COUNTIF(Number_of_Virtual_Meetings IS NULL) AS missing_number_of_virtual_meetings,
+    COUNTIF(Work_Life_Balance_Rating IS NULL) AS missing_work_life_balance_rating,
+    COUNTIF(Stress_Level IS NULL) AS missing_stress_level,
+    COUNTIF(Mental_Health_Condition IS NULL) AS missing_mental_health_condition,
+    COUNTIF(Productivity_Change IS NULL) AS missing_productivity_change,
+    COUNTIF(Social_Isolation_Rating IS NULL) AS missing_social_isolation_rating,
+    COUNTIF(Satisfaction_with_Remote_Work IS NULL) AS missing_satisfaction_with_remote_work,
+    COUNTIF(Company_Support_for_Remote_Work IS NULL) AS missing_company_support_for_remote_work,
+    COUNTIF(Physical_Activity IS NULL) AS missing_physical_activity,
+    COUNTIF(Sleep_Quality IS NULL) AS missing_sleep_quality,
+    COUNTIF(Region IS NULL) AS missing_region
+FROM `impactofremotework.remotework.remotework_temp`;
+
+-- Update the table to fill missing Stress_Level values with the average value of Stress_Level.
+-- This is commented out, as the update is not yet active.
+UPDATE `impactofremotework.remotework.remotework_temp`
+SET Stress_Level = (SELECT AVG(Stress_Level) FROM `impactofremotework.remotework.remotework_temp`)
+WHERE Stress_Level IS NULL;
+
+-- Update categorical columns (Stress_Level, Mental_Health_Condition, and Sleep_Quality) to numeric values.
+UPDATE `impactofremotework.remotework.remotewor_temp`
+SET
+    -- Map Stress_Level to numeric values (Low=1, Medium=2, High=3)
+    Stress_Level_Numeric = CASE
+        WHEN Stress_Level = 'Low' THEN 1
+        WHEN Stress_Level = 'Medium' THEN 2
+        WHEN Stress_Level = 'High' THEN 3
+        ELSE NULL
+    END,
+    
+    -- Map Mental_Health_Condition to numeric values (Depression=1, Anxiety=2, Burnout=3, None=4)
+    Mental_Health_Condition_Numeric = CASE
+        WHEN Mental_Health_Condition = 'Depression' THEN 1
+        WHEN Mental_Health_Condition = 'Anxiety' THEN 2
+        WHEN Mental_Health_Condition = 'Burnout' THEN 3
+        WHEN Mental_Health_Condition = 'None' THEN 4
+        ELSE NULL
+    END,
+    
+    -- Map Sleep_Quality to numeric values (Good=1, Average=2, Poor=3)
+    Sleep_Quality_Numeric = CASE
+        WHEN Sleep_Quality = 'Good' THEN 1
+        WHEN Sleep_Quality = 'Average' THEN 2
+        WHEN Sleep_Quality = 'Poor' THEN 3
+        ELSE NULL
+    END
+WHERE TRUE;
+
+-- Descriptive analysis: Calculate the average stress level by region.
+SELECT 
+    Region,
+    AVG(Stress_Level) AS avg_stress_level
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY Region
+ORDER BY avg_stress_level DESC;
+
+-- Descriptive analysis: Calculate the average mental health condition by region (numeric).
+SELECT 
+    Region,
+    AVG(Mental_Health_Condition) AS avg_Mental_Health_Condition
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY Region
+ORDER BY avg_Mental_Health_Condition DESC;
+
+-- Descriptive analysis: Calculate the average sleep quality by region (numeric).
+SELECT 
+    Region,
+    AVG(Sleep_Quality) AS avg_Sleep_Quality
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY Region
+ORDER BY avg_Sleep_Quality DESC;
+
+-- Descriptive analysis: Calculate the average mental health condition by job role (numeric).
+SELECT 
+    job_role,
+    AVG(Mental_Health_Condition) AS avg_mental_health,
+    COUNT(*) AS total_entries
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY job_role
+ORDER BY avg_mental_health DESC;
+
+-- Diagnostic analysis: Investigate the impact of virtual meetings on stress level and mental health.
+SELECT
+    Number_of_Virtual_Meetings,
+    AVG(Stress_Level) AS avg_stress_level,
+    COUNTIF(Mental_Health_Condition > 1) / COUNT(*) AS mental_health_impact_rate
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY Number_of_Virtual_Meetings;
+
+-- Diagnostic analysis: Explore the effect of years of experience on stress, work-life balance, and mental health.
+SELECT
+    Years_of_Experience,
+    AVG(Stress_Level) AS avg_stress_level,
+    AVG(Work_Life_Balance_Rating) AS avg_work_life_balance,
+    COUNTIF(Mental_Health_Condition > 1) / COUNT(*) AS mental_health_impact_rate
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY Years_of_Experience
+ORDER BY Years_of_Experience;
+
+-- Diagnostic analysis: Investigate the effect of work location on stress, work-life balance, and mental health.
+SELECT
+    Work_Location,
+    AVG(Stress_Level) AS avg_stress_level,
+    AVG(Work_Life_Balance_Rating) AS avg_work_life_balance,
+    COUNTIF(Mental_Health_Condition > 1) / COUNT(*) AS mental_health_impact_rate
+FROM `impactofremotework.remotework.remotework_temp`
+GROUP BY Work_Location
+ORDER BY Work_Location;
+
+-- Create a linear regression model to predict the Mental_Health_Condition based on other factors.
+CREATE OR REPLACE MODEL `impactofremotework.remotework.mental_health_model`
+OPTIONS(
+    model_type='linear_reg',
+    input_label_cols=['Mental_Health_Condition']
+) AS
+SELECT 
+    Hours_Worked_Per_Week,
+    Age,
+    Job_Role,
+    Gender,
+    Mental_Health_Condition
+FROM 
+    `impactofremotework.remotework.remotework_temp`
+WHERE 
+    Mental_Health_Condition IS NOT NULL;
+
+-- Use the trained model to predict the mental health condition for new test data.
+SELECT 
+    *, 
+    predicted_Mental_Health_Condition
+FROM 
+    ML.PREDICT(
+        MODEL `impactofremotework.remotework.mental_health_model`,
+        (
+            SELECT 
+                Hours_Worked_Per_Week,
+                Age,
+                Job_Role,
+                Gender
+            FROM 
+                `impactofremotework.testdata.testdata`
+        )
+    );
